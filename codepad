@@ -1,0 +1,56 @@
+#!/usr/bin/python
+
+# Codepad script
+# Author: Evgeny Martynov
+# Date:   01/09/2010
+
+# Usage: codepad [files...]
+# By default, stdin is read.
+
+import urllib
+import webbrowser
+from sys import argv
+
+def read_all():
+	str = []
+	reading = True
+	while reading:
+		try:
+			str.append(raw_input())
+		except:
+			reading = False
+	return '\n'.join(str)
+
+def get_lang(file):
+	langs = {
+		'c': 'C',
+		'cpp': 'C++',
+		'cc': 'C++',
+		'py': 'Python',
+	}
+	ext = file.split('.')[-1]
+	return langs.get(ext, 'Plain Text')
+
+def codepadGet(file):
+	code = read_all() if file is None else open(file, 'r').read()
+	lang = 'Plain Text' if file is None else get_lang(file)
+	url = 'http://codepad.org'
+
+	data = {
+		'code': code,
+		'lang': lang,
+		'submit': 'Submit',
+        'private': 'True',
+	}
+
+	response = urllib.urlopen(url, urllib.urlencode(data))
+	return response.geturl()
+
+def codepadPaste():
+	if len(argv) > 1:
+		for arg in argv[1:]:
+			print arg + ":", codepadGet(arg)
+	else:
+		print codepadGet(None)
+
+codepadPaste()

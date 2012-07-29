@@ -1,0 +1,29 @@
+#!/usr/bin/env python
+
+from sys import argv, stdin
+
+def analyse(file):
+    print "%s: " % f.name,
+
+    comment_lines, mixed_lines, code_lines = 0,0,0
+
+    for line in file.readlines():
+        line = line.strip()
+        posn = line.find('//')
+        if posn == 0:
+            comment_lines += 1
+        elif posn > 0:
+            mixed_lines += 1
+        elif line:
+            code_lines += 1
+
+    print '%d sloc, %d comments, %d mixed' % (code_lines, comment_lines, mixed_lines)
+
+if __name__ == '__main__':
+    if len(argv) == 1:
+        files = [stdin]
+    else:
+        files = map(open, argv[1:])
+
+    for f in files:
+        analyse(f)

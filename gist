@@ -1,0 +1,47 @@
+#!/usr/bin/env python
+
+from urllib import urlencode
+import httplib
+import json
+import sys
+
+from os.path import basename
+
+GIST_HOST = 'api.github.com'
+GIST_PATH = '/gists'
+
+def create_gist(files):
+    file_data = {}
+    for f in files:
+        file_data[basename(f.name)] = {
+            'content': f.read(),
+        }
+
+    data = {
+        'public': True,
+        'files': file_data,
+    }
+
+    conn = httplib.HTTPSConnection(GIST_HOST)
+    conn.request('POST', GIST_PATH, json.dumps(data))
+    resp = conn.getresponse()
+
+    data = json.loads(resp.read())
+
+    if resp.status != 201:
+        errors = json.dumps(data, sort_keys=False, indent=4)
+        print 'Response status was not 201 (Created)'
+        print 'Status:', resp.status
+        print 'Error:',  errors
+        sys.exit(1)
+
+    print 'Git pull url:', data['git_pull_url']
+    print 'Web url:     ', data['html_url']
+
+if __name__ == '__main__':
+    if len(sys.argv) > 1:
+        files = map(open, sys.argv[1:])
+    else:
+        files = [ sys.stdin ]
+
+    create_gist(files)

@@ -1,0 +1,189 @@
+#!/usr/bin/python
+
+from subprocess import PIPE, Popen, check_call as execute
+import shutil, os.path as path
+import os
+from paramiko import SSHClient
+import urllib
+import errno
+import datetime
+
+# Local settings
+TMP_FILE = '/tmp/scrot.png'
+DATE_PREFIX = ''
+DESTINATION = None
+
+# SSH settings
+TO_REMOTE_HOST = True
+SSH_HOST = None
+SSH_USER = None
+SSH_WEB_PATH = 'http://example.com/'
+
+#
+# Code start
+#
+
+ssh = None
+sftp = None
+
+def file_exists(file):
+    if not TO_REMOTE_HOST:
+        return path.exists(file)
+    else:
+        try:
+            sftp.stat(file)
+        except IOError as e:
+            if e.errno == errno.ENOENT:
+                return False
+            else:
+                raise
+        return True
+
+def upload_file(src, dest):
+    sftp.put(src, dest)
+
+def get_active_window_title():
+    root = Popen(['xprop', '-root'],  stdout=PIPE)
+
+    root_check = root.stdout
+    id = None
+    title = None
+
+    for line in root.stdout:
+        if '_NET_ACTIVE_WINDOW(WINDOW):' in line:
+            id = line.split()[4]
+            id = Popen(['xprop', '-id', id], stdout=PIPE)
+
+    if id:
+        for line in id.stdout:
+            if 'WM_ICON_NAME(STRING)' in line:
+                title = line.split(' = ')[1]
+                title = (title[1:])[:-2]
+
+    return title.strip() if title else ''
+
+def scrot(file, params=[]):
+    args = ['scrot', '-m']
+    args.extend(params)
+    args.append(file)
+    execute(args)
+
+def generate_filename(title, type):
+    counter = None
+    while True:
+        if counter:
+            fname = '%s-%d.%s' % (title, counter, type)
+        else:
+            fname = '%s.%s' % (title, type)
+
+        dest = path.join(DESTINATION, fname)
+        if file_exists(dest):
+            counter = counter+1 if counter else 1
+        else:
+            break
+    return fname
+
+def sanitise_filename(str):
+    return str.replace('/', '_')
+
+def process_file(src, title='Screenshot', type='png'):
+    if not TO_REMOTE_HOST:
+        global DESTINATION
+        DESTINATION = path.expanduser(DESTINATION)
+
+        if not file_exists(DESTINATION):
+            try:
+                os.makedirs(DESTINATION)
+            except OSError as exc:
+                if exc.errno == errno.EEXIST:
+                    pass
+                else: raise
+
+        f = path.join(DESTINATION, generate_filename(title, type))
+        shutil.copy(src, f)
+        return path.abspath(f)
+    else:
+        # Init SSH
+        global ssh, sftp
+        ssh = SSHClient()
+        ssh.load_system_host_keys()
+        ssh.connect(SSH_HOST, username=SSH_USER)
+        sftp = ssh.open_sftp()
+
+        # Fuck mkdir()
+        if not file_exists(DESTINATION):
+            dirs = []
+            temp = DESTINATION
+            while temp and temp != '/':
+                head, tail = path.split(temp)
+                dirs.append(tail)
+                temp = head
+            dirs = dirs[::-1]
+            p = temp
+            for temp in dirs:
+                p = path.join(p, temp)
+                try:
+                    sftp.mkdir(p)
+                except IOError as e:
+                    pass
+
+        # Proceed as before
+        f = generate_filename(title, type)
+        target = path.join(DESTINATION, f)
+        upload_file(src, target)
+
+        if DESTINATION.find('~/') == 0: DESTINATION = DESTINATION[2:]
+        if DESTINATION.find('www_root/') == 0: DESTINATION = DESTINATION.replace('www_root/', '')
+
+        return path.join(SSH_WEB_PATH, DESTINATION, urllib.quote(f))
+
+if __name__ == '__main__':
+    # Process args
+    from optparse import OptionParser, OptionGroup
+
+    parser = OptionParser()
+    parser.add_option('-a', '--area', dest='grab', action='store_const', const='area', help='Interactively select an area with the mouse')
+    parser.add_option('-w', '--window', dest='grab', action='store_const', const='window', help='Grabs the currently active window')
+
+    parser.add_option('-d', '--date', dest='use_date_prefix', action='store_true', default=False, help='Append the current year/day to the destination path')
+
+    group = OptionGroup(parser, 'REMOTE HOSTS', 'You can automatically upload screenshots to a remote host')
+    group.add_option('-u', '--upload', dest='SSH_HOST', help='Specify a remote of form [user@]host')
+    parser.add_option_group(group)
+
+    (options, args) = parser.parse_args()
+
+    # If no output dir supplied
+    if not args:
+        args = ['~']
+
+    # Parse SSH settings
+    TO_REMOTE_HOST = bool(options.SSH_HOST)
+    SSH_HOST = options.SSH_HOST
+    if SSH_HOST and '@' in SSH_HOST:
+        SSH_USER, SSH_HOST = SSH_HOST.split('@')
+
+    # Parse path settings
+    if options.use_date_prefix:
+        DATE_PREFIX = datetime.datetime.today().strftime('%Y-%m')
+    DESTINATION = path.join(args[0], DATE_PREFIX)
+
+#    if TO_REMOTE_HOST and DESTINATION[0] not in ['/', '~']:
+#        DESTINATION = path.join('~', DESTINATION)
+
+    grab = options.grab or 'screen'
+
+    # Work out what to do and do it
+    saved_title = 'Screenshot'
+
+    if grab == 'screen':
+        scrot(TMP_FILE)
+    elif grab == 'window':
+        scrot(TMP_FILE, params=['-bu'])
+        saved_title = 'Screenshot-' + sanitise_filename(get_active_window_title())
+    elif grab == 'area':
+        scrot(TMP_FILE, params=['-s'])
+
+    # Rename file, cp/scp it somewhere, etc
+    uri = process_file(TMP_FILE, title=saved_title, type='png')
+    print uri

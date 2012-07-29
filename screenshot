@@ -1,0 +1,20 @@
+#!/bin/bash
+
+# Call the screenshotter with all args
+LINK=$( evgeny_screenshot $@ --date --upload you@example.com path/to/files )
+
+echo $LINK
+notify-send $LINK
+
+# Copy to X primary cliboard
+echo $LINK | xclip -i
+
+# Copy to GTK cliboard
+python -c "
+import pygtk
+pygtk.require('2.0')
+import gtk
+
+clipboard = gtk.clipboard_get()
+clipboard.set_text('$LINK')
+clipboard.store() "
