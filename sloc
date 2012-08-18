@@ -2,7 +2,7 @@
 
 from sys import argv, stdin
 
-def analyse(file):
+def analyse(f):
     print "%s: " % f.name,
 
     comment_lines, mixed_lines, code_lines = 0,0,0
