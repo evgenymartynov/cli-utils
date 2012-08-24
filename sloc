@@ -7,7 +7,7 @@ def analyse(f):
 
     comment_lines, mixed_lines, code_lines = 0,0,0
 
-    for line in file.readlines():
+    for line in f.readlines():
         line = line.strip()
         posn = line.find('//')
         if posn == 0:
