@@ -3,8 +3,9 @@
 from subprocess import PIPE, Popen, check_call as execute
 import shutil, os.path as path
 import os
+import paramiko
 from paramiko import SSHClient
-import urllib
+import urllib, urlparse
 import errno
 import datetime
 
@@ -17,7 +18,9 @@ DESTINATION = None
 TO_REMOTE_HOST = True
 SSH_HOST = None
 SSH_USER = None
-SSH_WEB_PATH = 'http://example.com/'
+SSH_PORT = None
+SSH_WEB_PATH = 'http://archimedes.epochfail.com/'
+KEY_FILENAME = None
 
 #
 # Code start
@@ -62,10 +65,17 @@ def get_active_window_title():
 
     return title.strip() if title else ''
 
-def scrot(file, params=[]):
-    args = ['scrot', '-m']
-    args.extend(params)
-    args.append(file)
+def take_screenshot(filename, window=False, area=False):
+    args = ['gnome-screenshot', '-f', filename]
+
+    if window:
+      args.append('--window')
+      args.append('--remove-border')
+      args.append('--border-effect=shadow')
+
+    if area:
+      args.append('--area')
+
     execute(args)
 
 def generate_filename(title, type):
@@ -106,8 +116,9 @@ def process_file(src, title='Screenshot', type='png'):
         # Init SSH
         global ssh, sftp
         ssh = SSHClient()
+        ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
         ssh.load_system_host_keys()
-        ssh.connect(SSH_HOST, username=SSH_USER)
+        ssh.connect(SSH_HOST, port=SSH_PORT, username=SSH_USER, key_filename=KEY_FILENAME)
         sftp = ssh.open_sftp()
 
         # Fuck mkdir()
@@ -149,6 +160,7 @@ if __name__ == '__main__':
 
     group = OptionGroup(parser, 'REMOTE HOSTS', 'You can automatically upload screenshots to a remote host')
     group.add_option('-u', '--upload', dest='SSH_HOST', help='Specify a remote of form [user@]host')
+    group.add_option('-k', '--key', dest='KEY_FILENAME', help='Specify which private SSH key to use')
     parser.add_option_group(group)
 
     (options, args) = parser.parse_args()
@@ -159,9 +171,15 @@ if __name__ == '__main__':
 
     # Parse SSH settings
     TO_REMOTE_HOST = bool(options.SSH_HOST)
-    SSH_HOST = options.SSH_HOST
-    if SSH_HOST and '@' in SSH_HOST:
-        SSH_USER, SSH_HOST = SSH_HOST.split('@')
+    if TO_REMOTE_HOST:
+        host_string = options.SSH_HOST
+        if not host_string.startswith('//'): # Account for urlparse's strictness
+            host_string = '//' + host_string
+        parsed_host = urlparse.urlparse(host_string)
+        SSH_USER = parsed_host.username
+        SSH_HOST = parsed_host.hostname
+        SSH_PORT = parsed_host.port or 22
+        KEY_FILENAME = options.KEY_FILENAME
 
     # Parse path settings
     if options.use_date_prefix:
@@ -177,12 +195,12 @@ if __name__ == '__main__':
     saved_title = 'Screenshot'
 
     if grab == 'screen':
-        scrot(TMP_FILE)
+        take_screenshot(TMP_FILE)
     elif grab == 'window':
-        scrot(TMP_FILE, params=['-bu'])
+        take_screenshot(TMP_FILE, window=True)
         saved_title = 'Screenshot-' + sanitise_filename(get_active_window_title())
     elif grab == 'area':
-        scrot(TMP_FILE, params=['-s'])
+        take_screenshot(TMP_FILE, area=True)
 
     # Rename file, cp/scp it somewhere, etc
     uri = process_file(TMP_FILE, title=saved_title, type='png')
