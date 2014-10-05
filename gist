@@ -23,7 +23,11 @@ def create_gist(files):
     }
 
     conn = httplib.HTTPSConnection(GIST_HOST)
-    conn.request('POST', GIST_PATH, json.dumps(data))
+    conn.request(
+        'POST',
+        GIST_PATH,
+        json.dumps(data),
+        headers = {'User-Agent': 'httplib'})
     resp = conn.getresponse()
 
     data = json.loads(resp.read())
