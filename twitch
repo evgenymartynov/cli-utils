@@ -1,0 +1,12 @@
+#!/bin/bash
+
+set -e
+
+if [[ $# -lt 1 ]]; then
+  echo "Usage: $0 CHANNEL [QUALITY]"
+  exit 1
+fi
+
+livestreamer --hls-segment-threads 5 \
+  twitch.tv/$1 ${2:-source} || notify-send "$0 $@ PICNIC"
+  #--player "vlc --file-caching 10000 --network-caching 10000" \
