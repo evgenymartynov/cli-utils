@@ -1,0 +1,17 @@
+#!/usr/bin/python2
+
+import sys, subprocess
+data = sys.stdin.read().rstrip()
+
+# Copy to GTK cliboard
+import pygtk
+pygtk.require('2.0')
+import gtk
+clipboard = gtk.clipboard_get()
+clipboard.set_text(data)
+clipboard.store()
+
+# Copy to X primary cliboard
+p = subprocess.Popen('xclip -i'.split(), stdin=subprocess.PIPE)
+p.communicate(data)
+p.wait()

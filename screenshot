@@ -1,22 +1,9 @@
 #!/bin/bash
 
 # Call the screenshotter with all args
-LINK=$( evgeny_screenshot $@ --date --upload ubuntu@archimedes.epochfail.com --key ~/.ssh/archimedes www_root/f )
+LINK=$(evgeny_screenshot $@ --date --upload ubuntu@epochfail.com --key ~/.ssh/archimedes www_root/f)
+LINK=${LINK/archimedes./}
 
-LINK="$(echo $LINK | sed s/archimedes.//)"
-
-echo $LINK
 notify-send $LINK
-
-# Copy to X primary cliboard
-echo $LINK | xclip -i
-
-# Copy to GTK cliboard
-python -c "
-import pygtk
-pygtk.require('2.0')
-import gtk
-
-clipboard = gtk.clipboard_get()
-clipboard.set_text('$LINK')
-clipboard.store() "
+echo $LINK
+echo $LINK | copy
